@@ -132,7 +132,13 @@ async function clickFirstMatch(page, candidates, timeout = 5000) {
     try {
       const locator = locatorFn(page);
       await locator.first().waitFor({ state: "visible", timeout });
-      await locator.first().click();
+      // jQuery Mobile은 touch 이벤트(tap)에 바인딩된 핸들러가 많아 일반 click으로는
+      // 반응하지 않는 경우가 있어 tap을 우선 시도하고 실패하면 click으로 폴백
+      try {
+        await locator.first().tap();
+      } catch (_) {
+        await locator.first().click();
+      }
       return true;
     } catch (_) {
       // try next candidate
