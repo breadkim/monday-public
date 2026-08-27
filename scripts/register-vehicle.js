@@ -84,7 +84,8 @@ async function dumpInputs(page, label) {
   const info = await safeEvaluate(page, () => {
     return Array.from(document.querySelectorAll("input, select, textarea")).map((el) => {
       const rect = el.getBoundingClientRect();
-      return `<${el.tagName.toLowerCase()} type="${el.type || ""}" name="${el.name || ""}" id="${el.id || ""}" placeholder="${el.placeholder || ""}" visible=${rect.width > 0 && rect.height > 0}>`;
+      const onclick = el.getAttribute("onclick") || "";
+      return `<${el.tagName.toLowerCase()} type="${el.type || ""}" name="${el.name || ""}" id="${el.id || ""}" placeholder="${el.placeholder || ""}" value="${el.value || ""}" class="${(el.className || "").toString().slice(0, 60)}" onclick="${onclick}" visible=${rect.width > 0 && rect.height > 0}>`;
     });
   });
   console.log(`===== [INPUT DUMP: ${label}] (${info ? info.length : "unavailable"}) =====`);
@@ -190,57 +191,19 @@ async function registerVehicle(page) {
   }
   await shot(page, "09-register-form");
   await dumpInputs(page, "register-form");
+  await dumpClickables(page, "register-form");
 
-  // 차량번호, 시작일, 종료일 입력 - 정확한 필드명을 몰라 placeholder/라벨 기반으로 우선 시도하고,
-  // 실패 시 화면에 보이는 입력창을 순서대로(차량번호 -> 시작일 -> 종료일) 채우는 방식으로 폴백
-  const vehicleInput = page
-    .locator('input[placeholder*="차량"], input[name*="car" i], input[name*="vehicle" i]')
-    .first();
-  const startInput = page
-    .locator('input[placeholder*="시작"], input[type="date"]')
-    .first();
-  const endInput = page
-    .locator('input[placeholder*="종료"], input[type="date"]')
-    .nth(1);
+  // 차량번호는 확인된 실제 필드 id로 입력
+  await page.locator("#acPlateNo").fill(requireEnv("VEHICLE_NUMBER", VEHICLE_NUMBER));
 
-  if (await vehicleInput.count()) {
-    await vehicleInput.fill(requireEnv("VEHICLE_NUMBER", VEHICLE_NUMBER));
-  } else {
-    const inputs = page.locator("input:visible");
-    await inputs.nth(0).fill(requireEnv("VEHICLE_NUMBER", VEHICLE_NUMBER));
-  }
-
-  if (await startInput.count()) {
-    await startInput.fill(requireEnv("START_DATE", START_DATE));
-  } else {
-    const inputs = page.locator("input:visible");
-    await inputs.nth(1).fill(requireEnv("START_DATE", START_DATE));
-  }
-
-  if ((await endInput.count()) > 0) {
-    await endInput.fill(requireEnv("END_DATE", END_DATE));
-  } else {
-    const inputs = page.locator("input:visible");
-    await inputs.nth(2).fill(requireEnv("END_DATE", END_DATE));
-  }
-
-  await shot(page, "10-form-filled");
-
-  const submitted = await clickFirstMatch(page, [
-    (p) => p.getByRole("button", { name: /등록|저장|확인/ }),
-    (p) => p.locator('button:has-text("등록")'),
-    (p) => p.locator('button:has-text("저장")'),
-    (p) => p.locator('button:has-text("확인")'),
-  ]);
-  if (!submitted) {
-    await shot(page, "11-submit-button-not-found");
-    throw new Error(
-      "등록 폼의 제출(등록/저장/확인) 버튼을 찾지 못했습니다. screenshots/11-submit-button-not-found.png 를 확인해주세요."
-    );
-  }
-
-  await page.waitForLoadState("networkidle").catch(() => {});
-  await shot(page, "12-after-submit");
+  // 시작일/종료일 필드 구조를 아직 확인하지 못했습니다. 안전을 위해 (다른 등록건의
+  // 삭제 버튼 등 임의 요소를 잘못 조작하는 일이 없도록) 여기서는 채우지 않고
+  // 진단 로그만 남기고 중단합니다. 위 DOM/INPUT DUMP를 확인한 뒤 정확한 셀렉터로
+  // 다음 커밋에서 채워 넣습니다.
+  await shot(page, "09b-vehicle-filled");
+  throw new Error(
+    "시작일/종료일 필드 구조 확인 전이라 안전을 위해 여기서 중단합니다. 위 DOM DUMP/INPUT DUMP 로그를 확인하세요."
+  );
 }
 
 async function checkResult(page) {
