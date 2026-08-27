@@ -226,8 +226,14 @@ async function registerVehicle(page) {
   if (btnHtml) console.log(JSON.stringify(btnHtml, null, 2));
   console.log("===== [/BTN outerHTML] =====");
 
-  // "등록" 버튼은 href="javascript:fncAddDcList();" 로 구현되어 있어 클릭/탭이
-  // 아니라 이 함수를 직접 호출해야 함 (진단 로그로 확인됨)
+  // "등록" 버튼은 href="javascript:fncAddDcList();" 로 구현되어 있고, 이 함수가
+  // window.open()으로 등록 폼을 새 창/탭으로 여는 것으로 보임. popup 이벤트를
+  // 먼저 걸어둔 뒤 함수를 호출해 새 페이지가 뜨는지 확인
+  const popupPromise = page
+    .context()
+    .waitForEvent("page", { timeout: 8000 })
+    .catch(() => null);
+
   const fnCalled = await safeEvaluate(page, () => {
     if (typeof window.fncAddDcList === "function") {
       window.fncAddDcList();
@@ -242,13 +248,34 @@ async function registerVehicle(page) {
     );
   }
 
+  const popup = await popupPromise;
+  if (popup) {
+    console.log("[popup] 새 창/탭이 감지되어 그쪽으로 전환합니다: " + popup.url());
+    await popup.waitForLoadState("domcontentloaded").catch(() => {});
+    page = popup;
+  }
+
   // 모달이 뜨는지 "사전차량등록" 제출 버튼 텍스트로 확인 (배경 목록은 그대로 DOM에 남아있을 수 있음)
-  const modalOpened = await page
+  let modalOpened = await page
     .getByText("사전차량등록", { exact: true })
     .first()
     .waitFor({ state: "visible", timeout: 8000 })
     .then(() => true)
     .catch(() => false);
+
+  // popup도 못 잡고 모달도 안 떴다면, 알려진 등록 폼 URL로 직접 이동 시도 (같은 로그인 세션 쿠키 유지)
+  if (!modalOpened) {
+    console.log("[fallback] 팝업 감지/모달 확인 실패, 직접 URL 이동을 시도합니다.");
+    await page
+      .goto(`${BASE_URL}/customer/dclist/doViewPopup`, { waitUntil: "domcontentloaded" })
+      .catch((err) => console.log("[fallback] goto 실패: " + err.message));
+    modalOpened = await page
+      .getByText("사전차량등록", { exact: true })
+      .first()
+      .waitFor({ state: "visible", timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+  }
 
   await shot(page, "09-register-form");
   await dumpInputs(page, "register-form");
