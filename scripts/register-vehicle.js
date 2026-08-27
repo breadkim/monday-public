@@ -40,8 +40,21 @@ async function shot(page, name) {
 
 // 스크린샷을 이 환경에서 직접 볼 수 없어, 클릭 가능한 요소들을 텍스트로 로그에 남겨
 // 실제 페이지 구조를 job 로그만으로 파악하기 위한 진단 함수
+// 내비게이션 도중 evaluate가 깨지는 경우를 대비해 한 번 재시도 후 실패해도 무시
+async function safeEvaluate(page, fn) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await page.evaluate(fn);
+    } catch (err) {
+      await page.waitForLoadState("load").catch(() => {});
+      await page.waitForTimeout(500);
+    }
+  }
+  return null;
+}
+
 async function dumpClickables(page, label) {
-  const info = await page.evaluate(() => {
+  const info = await safeEvaluate(page, () => {
     const els = Array.from(
       document.querySelectorAll('button, a, [role="button"], [onclick], nav *, header *')
     );
@@ -62,20 +75,20 @@ async function dumpClickables(page, label) {
     }
     return out;
   });
-  console.log(`===== [DOM DUMP: ${label}] (${info.length}) =====`);
-  console.log(info.join("\n"));
+  console.log(`===== [DOM DUMP: ${label}] (${info ? info.length : "unavailable"}) =====`);
+  if (info) console.log(info.join("\n"));
   console.log("===== [/DOM DUMP] =====");
 }
 
 async function dumpInputs(page, label) {
-  const info = await page.evaluate(() => {
+  const info = await safeEvaluate(page, () => {
     return Array.from(document.querySelectorAll("input, select, textarea")).map((el) => {
       const rect = el.getBoundingClientRect();
       return `<${el.tagName.toLowerCase()} type="${el.type || ""}" name="${el.name || ""}" id="${el.id || ""}" placeholder="${el.placeholder || ""}" visible=${rect.width > 0 && rect.height > 0}>`;
     });
   });
-  console.log(`===== [INPUT DUMP: ${label}] (${info.length}) =====`);
-  console.log(info.join("\n"));
+  console.log(`===== [INPUT DUMP: ${label}] (${info ? info.length : "unavailable"}) =====`);
+  if (info) console.log(info.join("\n"));
   console.log("===== [/INPUT DUMP] =====");
 }
 
@@ -157,6 +170,7 @@ async function openPreDiscountMenu(page) {
     );
   }
   await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(1000);
   await shot(page, "07-predicount-status-page");
 }
 
