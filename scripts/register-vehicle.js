@@ -300,10 +300,24 @@ async function registerVehicle(page) {
     );
   }
 
-  // 모달까지는 확인했으나 시작일/종료일 캘린더 위젯의 정확한 구조는 아직 확인 전이라,
-  // 안전을 위해 여기서 멈추고 위 진단 로그를 바탕으로 다음 커밋에서 마저 구현합니다.
+  // 확인된 실제 필드: acPlateNo(텍스트), dtStartDate/dtEndDate(type=date, 기본값 오늘)
+  await page.locator("#acPlateNo").fill(requireEnv("VEHICLE_NUMBER", VEHICLE_NUMBER));
+  await page.locator("#dtStartDate").fill(requireEnv("START_DATE", START_DATE));
+  await page.locator("#dtEndDate").fill(requireEnv("END_DATE", END_DATE));
+  await shot(page, "10-form-filled");
+
+  // "사전차량등록" 제출 버튼도 등록 버튼처럼 javascript: href 패턴일 가능성이 높아
+  // 실제 제출(되돌리기 어려운 동작)을 하기 전에 정확한 함수명부터 확인
+  const submitHtml = await safeEvaluate(page, () => {
+    const el = document.querySelector("#btnSearch");
+    return el ? el.outerHTML.slice(0, 500) : null;
+  });
+  console.log("===== [SUBMIT BTN outerHTML] =====");
+  console.log(submitHtml);
+  console.log("===== [/SUBMIT BTN outerHTML] =====");
+
   throw new Error(
-    "등록 모달은 확인했습니다. 시작일/종료일 캘린더 구조 확인을 위해 여기서 멈춥니다. 위 DOM/INPUT DUMP 로그를 확인하세요."
+    "차량번호/시작일/종료일 입력까지 완료했습니다. 실제 등록(되돌리기 어려운 동작) 전에 제출 버튼의 정확한 함수명을 확인하기 위해 여기서 멈춥니다."
   );
 }
 
