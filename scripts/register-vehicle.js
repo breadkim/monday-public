@@ -41,10 +41,10 @@ async function shot(page, name) {
 // 스크린샷을 이 환경에서 직접 볼 수 없어, 클릭 가능한 요소들을 텍스트로 로그에 남겨
 // 실제 페이지 구조를 job 로그만으로 파악하기 위한 진단 함수
 // 내비게이션 도중 evaluate가 깨지는 경우를 대비해 한 번 재시도 후 실패해도 무시
-async function safeEvaluate(page, fn) {
+async function safeEvaluate(page, fn, arg) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      return await page.evaluate(fn);
+      return await page.evaluate(fn, arg);
     } catch (err) {
       await page.waitForLoadState("load").catch(() => {});
       await page.waitForTimeout(500);
@@ -91,6 +91,39 @@ async function dumpInputs(page, label) {
   console.log(`===== [INPUT DUMP: ${label}] (${info ? info.length : "unavailable"}) =====`);
   if (info) console.log(info.join("\n"));
   console.log("===== [/INPUT DUMP] =====");
+}
+
+// 태그 종류에 상관없이(div/span 등) id/class/name/placeholder/text에 특정 키워드가
+// 포함된 모든 요소를 찾아 로그로 남김 - 날짜(캘린더) 관련 요소가 button/a/input이
+// 아닌 경우를 대비한 진단 함수
+async function dumpByKeyword(page, label, keywords) {
+  const info = await safeEvaluate(
+    page,
+    (keywords) => {
+      const els = Array.from(document.querySelectorAll("*"));
+      const out = [];
+      for (const el of els) {
+        const id = el.id || "";
+        const cls = (el.className || "").toString();
+        const name = el.getAttribute && (el.getAttribute("name") || "");
+        const placeholder = el.getAttribute && (el.getAttribute("placeholder") || "");
+        const text = (el.childElementCount === 0 ? el.textContent || "" : "").trim().slice(0, 30);
+        const haystack = `${id} ${cls} ${name} ${placeholder} ${text}`.toLowerCase();
+        if (keywords.some((k) => haystack.includes(k.toLowerCase()))) {
+          const rect = el.getBoundingClientRect();
+          out.push(
+            `<${el.tagName.toLowerCase()} id="${id}" class="${cls.slice(0, 60)}" name="${name}" placeholder="${placeholder}"> text="${text}" visible=${rect.width > 0 && rect.height > 0}`
+          );
+        }
+        if (out.length >= 80) break;
+      }
+      return out;
+    },
+    keywords
+  );
+  console.log(`===== [KEYWORD DUMP: ${label}] (${info ? info.length : "unavailable"}) =====`);
+  if (info) console.log(info.join("\n"));
+  console.log("===== [/KEYWORD DUMP] =====");
 }
 
 // 텍스트로 후보들을 순서대로 시도해 클릭 (사이트 구조를 정확히 몰라 여러 후보를 폴백으로 시도)
@@ -192,6 +225,19 @@ async function registerVehicle(page) {
   await shot(page, "09-register-form");
   await dumpInputs(page, "register-form");
   await dumpClickables(page, "register-form");
+  await dumpByKeyword(page, "register-form", [
+    "date",
+    "calendar",
+    "start",
+    "end",
+    "시작",
+    "종료",
+    "cal",
+    "day",
+    "picker",
+    "term",
+    "period",
+  ]);
 
   // 차량번호는 확인된 실제 필드 id로 입력
   await page.locator("#acPlateNo").fill(requireEnv("VEHICLE_NUMBER", VEHICLE_NUMBER));
