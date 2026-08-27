@@ -211,7 +211,10 @@ async function openPreDiscountMenu(page) {
 async function registerVehicle(page) {
   await dumpClickables(page, "predicount-status-page");
 
+  // 사용자 확인: 목록 화면의 빨간 "등록" 버튼을 누르면 [서초로이움지젤] 제목의
+  // 등록 모달(차량번호/시작일/종료일/할인/비고 + "사전차량등록" 버튼)이 뜸
   const registerClicked = await clickFirstMatch(page, [
+    (p) => p.locator("#btnSearch.ui-btn-d"),
     (p) => p.getByRole("button", { name: /^등록$/ }),
     (p) => p.locator('button:has-text("등록")'),
     (p) => p.locator('a:has-text("등록")'),
@@ -222,6 +225,15 @@ async function registerVehicle(page) {
       "'등록' 버튼을 찾지 못했습니다. screenshots/08-register-button-not-found.png 를 확인해주세요."
     );
   }
+
+  // 모달이 뜨는지 "사전차량등록" 제출 버튼 텍스트로 확인 (배경 목록은 그대로 DOM에 남아있을 수 있음)
+  const modalOpened = await page
+    .getByText("사전차량등록", { exact: true })
+    .first()
+    .waitFor({ state: "visible", timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+
   await shot(page, "09-register-form");
   await dumpInputs(page, "register-form");
   await dumpClickables(page, "register-form");
@@ -239,16 +251,16 @@ async function registerVehicle(page) {
     "period",
   ]);
 
-  // 차량번호는 확인된 실제 필드 id로 입력
-  await page.locator("#acPlateNo").fill(requireEnv("VEHICLE_NUMBER", VEHICLE_NUMBER));
+  if (!modalOpened) {
+    throw new Error(
+      "'등록' 클릭 후 등록 모달('사전차량등록' 텍스트)이 뜨지 않았습니다. 위 진단 로그를 확인하세요."
+    );
+  }
 
-  // 시작일/종료일 필드 구조를 아직 확인하지 못했습니다. 안전을 위해 (다른 등록건의
-  // 삭제 버튼 등 임의 요소를 잘못 조작하는 일이 없도록) 여기서는 채우지 않고
-  // 진단 로그만 남기고 중단합니다. 위 DOM/INPUT DUMP를 확인한 뒤 정확한 셀렉터로
-  // 다음 커밋에서 채워 넣습니다.
-  await shot(page, "09b-vehicle-filled");
+  // 모달까지는 확인했으나 시작일/종료일 캘린더 위젯의 정확한 구조는 아직 확인 전이라,
+  // 안전을 위해 여기서 멈추고 위 진단 로그를 바탕으로 다음 커밋에서 마저 구현합니다.
   throw new Error(
-    "시작일/종료일 필드 구조 확인 전이라 안전을 위해 여기서 중단합니다. 위 DOM DUMP/INPUT DUMP 로그를 확인하세요."
+    "등록 모달은 확인했습니다. 시작일/종료일 캘린더 구조 확인을 위해 여기서 멈춥니다. 위 DOM/INPUT DUMP 로그를 확인하세요."
   );
 }
 
