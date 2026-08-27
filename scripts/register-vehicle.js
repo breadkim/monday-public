@@ -226,18 +226,19 @@ async function registerVehicle(page) {
   if (btnHtml) console.log(JSON.stringify(btnHtml, null, 2));
   console.log("===== [/BTN outerHTML] =====");
 
-  // 사용자 확인: 목록 화면의 빨간 "등록" 버튼을 누르면 [서초로이움지젤] 제목의
-  // 등록 모달(차량번호/시작일/종료일/할인/비고 + "사전차량등록" 버튼)이 뜸
-  const registerClicked = await clickFirstMatch(page, [
-    (p) => p.locator("#btnSearch.ui-btn-d"),
-    (p) => p.getByRole("button", { name: /^등록$/ }),
-    (p) => p.locator('button:has-text("등록")'),
-    (p) => p.locator('a:has-text("등록")'),
-  ]);
-  if (!registerClicked) {
+  // "등록" 버튼은 href="javascript:fncAddDcList();" 로 구현되어 있어 클릭/탭이
+  // 아니라 이 함수를 직접 호출해야 함 (진단 로그로 확인됨)
+  const fnCalled = await safeEvaluate(page, () => {
+    if (typeof window.fncAddDcList === "function") {
+      window.fncAddDcList();
+      return true;
+    }
+    return false;
+  });
+  if (!fnCalled) {
     await shot(page, "08-register-button-not-found");
     throw new Error(
-      "'등록' 버튼을 찾지 못했습니다. screenshots/08-register-button-not-found.png 를 확인해주세요."
+      "fncAddDcList() 함수를 찾지 못했습니다. screenshots/08-register-button-not-found.png 를 확인해주세요."
     );
   }
 
