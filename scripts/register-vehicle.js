@@ -38,6 +38,47 @@ async function shot(page, name) {
   console.log(`[screenshot] ${file}`);
 }
 
+// 스크린샷을 이 환경에서 직접 볼 수 없어, 클릭 가능한 요소들을 텍스트로 로그에 남겨
+// 실제 페이지 구조를 job 로그만으로 파악하기 위한 진단 함수
+async function dumpClickables(page, label) {
+  const info = await page.evaluate(() => {
+    const els = Array.from(
+      document.querySelectorAll('button, a, [role="button"], [onclick], nav *, header *')
+    );
+    const seen = new Set();
+    const out = [];
+    for (const el of els) {
+      const text = (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40);
+      const aria = el.getAttribute("aria-label") || "";
+      const cls = (el.className || "").toString().slice(0, 60);
+      const id = el.id || "";
+      const tag = el.tagName.toLowerCase();
+      if (!text && !aria && !cls && !id) continue;
+      const key = `${tag}|${id}|${cls}|${text}|${aria}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(`<${tag} id="${id}" class="${cls}" aria-label="${aria}"> ${text}`);
+      if (out.length >= 60) break;
+    }
+    return out;
+  });
+  console.log(`===== [DOM DUMP: ${label}] (${info.length}) =====`);
+  console.log(info.join("\n"));
+  console.log("===== [/DOM DUMP] =====");
+}
+
+async function dumpInputs(page, label) {
+  const info = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll("input, select, textarea")).map((el) => {
+      const rect = el.getBoundingClientRect();
+      return `<${el.tagName.toLowerCase()} type="${el.type || ""}" name="${el.name || ""}" id="${el.id || ""}" placeholder="${el.placeholder || ""}" visible=${rect.width > 0 && rect.height > 0}>`;
+    });
+  });
+  console.log(`===== [INPUT DUMP: ${label}] (${info.length}) =====`);
+  console.log(info.join("\n"));
+  console.log("===== [/INPUT DUMP] =====");
+}
+
 // 텍스트로 후보들을 순서대로 시도해 클릭 (사이트 구조를 정확히 몰라 여러 후보를 폴백으로 시도)
 async function clickFirstMatch(page, candidates, timeout = 5000) {
   for (const locatorFn of candidates) {
@@ -87,6 +128,8 @@ async function login(page) {
 }
 
 async function openPreDiscountMenu(page) {
+  await dumpClickables(page, "after-login");
+
   // 화면 상단 삼선(햄버거) 메뉴 버튼 클릭 - 정확한 셀렉터를 몰라 여러 후보를 시도
   const menuOpened = await clickFirstMatch(page, [
     (p) => p.locator('button[aria-label*="메뉴"]'),
@@ -103,6 +146,7 @@ async function openPreDiscountMenu(page) {
     );
   }
   await shot(page, "05-menu-open");
+  await dumpClickables(page, "menu-open");
 
   const menuClicked = await clickFirstMatch(page, [
     (p) => p.getByText("사전할인등록현황", { exact: false }),
@@ -119,6 +163,8 @@ async function openPreDiscountMenu(page) {
 }
 
 async function registerVehicle(page) {
+  await dumpClickables(page, "predicount-status-page");
+
   const registerClicked = await clickFirstMatch(page, [
     (p) => p.getByRole("button", { name: /^등록$/ }),
     (p) => p.locator('button:has-text("등록")'),
@@ -131,6 +177,7 @@ async function registerVehicle(page) {
     );
   }
   await shot(page, "09-register-form");
+  await dumpInputs(page, "register-form");
 
   // 차량번호, 시작일, 종료일 입력 - 정확한 필드명을 몰라 placeholder/라벨 기반으로 우선 시도하고,
   // 실패 시 화면에 보이는 입력창을 순서대로(차량번호 -> 시작일 -> 종료일) 채우는 방식으로 폴백
