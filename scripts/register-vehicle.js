@@ -130,14 +130,12 @@ async function login(page) {
 async function openPreDiscountMenu(page) {
   await dumpClickables(page, "after-login");
 
-  // 화면 상단 삼선(햄버거) 메뉴 버튼 클릭 - 정확한 셀렉터를 몰라 여러 후보를 시도
+  // jQuery Mobile 사이트: 삼선 메뉴는 a.slide-menu-open (class에 ui-icon-flat-menu 포함)
   const menuOpened = await clickFirstMatch(page, [
+    (p) => p.locator("a.slide-menu-open"),
+    (p) => p.locator(".ui-icon-flat-menu"),
     (p) => p.locator('button[aria-label*="메뉴"]'),
     (p) => p.locator('[class*="hamburger" i]'),
-    (p) => p.locator('[class*="gnb" i] button'),
-    (p) => p.locator('header button').first(),
-    (p) => p.locator('nav button').first(),
-    (p) => p.locator('img[alt*="메뉴"]'),
   ]);
   if (!menuOpened) {
     await shot(page, "04-menu-not-found");
