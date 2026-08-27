@@ -215,6 +215,7 @@ async function openPreDiscountMenu(page) {
 }
 
 async function registerVehicle(page) {
+  const originalPage = page;
   await dumpClickables(page, "predicount-status-page");
 
   // 클릭/탭이 두 번 다 아무 효과가 없었으므로, 실제 href/onclick/data-* 속성을
@@ -306,30 +307,31 @@ async function registerVehicle(page) {
   await page.locator("#dtEndDate").fill(requireEnv("END_DATE", END_DATE));
   await shot(page, "10-form-filled");
 
-  // "사전차량등록" 제출 버튼도 등록 버튼처럼 javascript: href 패턴일 가능성이 높아
-  // 실제 제출(되돌리기 어려운 동작)을 하기 전에 정확한 함수명부터 확인
-  const submitHtml = await safeEvaluate(page, () => {
-    const el = document.querySelector("#btnSearch");
-    return el ? el.outerHTML.slice(0, 500) : null;
-  });
-  console.log("===== [SUBMIT BTN outerHTML] =====");
-  console.log(submitHtml);
-  console.log("===== [/SUBMIT BTN outerHTML] =====");
+  // 성공/오류 시 alert()가 뜰 수 있어 자동으로 확인 처리
+  page.on("dialog", (d) => d.accept().catch(() => {}));
 
-  throw new Error(
-    "차량번호/시작일/종료일 입력까지 완료했습니다. 실제 등록(되돌리기 어려운 동작) 전에 제출 버튼의 정확한 함수명을 확인하기 위해 여기서 멈춥니다."
-  );
+  // "사전차량등록" 제출 버튼도 등록 버튼처럼 href="javascript:fncInCarProcess();" 패턴
+  await safeEvaluate(page, () => {
+    if (typeof window.fncInCarProcess === "function") {
+      window.fncInCarProcess();
+    }
+  });
+  await page.waitForTimeout(2000);
+  await shot(page, "11-after-submit");
+
+  if (page !== originalPage) {
+    await page.close().catch(() => {});
+  }
 }
 
 async function checkResult(page) {
-  const checked = await clickFirstMatch(page, [
-    (p) => p.getByRole("button", { name: /^조회$/ }),
-    (p) => p.locator('button:has-text("조회")'),
-    (p) => p.locator('a:has-text("조회")'),
-  ]);
-  if (checked) {
-    await page.waitForLoadState("networkidle").catch(() => {});
-  }
+  // "차량조회" 버튼도 href="javascript:fncDoListMst();" 패턴이라 직접 호출해 목록을 갱신
+  await safeEvaluate(page, () => {
+    if (typeof window.fncDoListMst === "function") {
+      window.fncDoListMst();
+    }
+  });
+  await page.waitForTimeout(1500);
   await shot(page, "13-check-result");
 
   const bodyText = await page.locator("body").innerText().catch(() => "");
