@@ -217,6 +217,15 @@ async function openPreDiscountMenu(page) {
 async function registerVehicle(page) {
   await dumpClickables(page, "predicount-status-page");
 
+  // 클릭/탭이 두 번 다 아무 효과가 없었으므로, 실제 href/onclick/data-* 속성을
+  // 확인해 jQuery Mobile popup 트리거 방식을 파악
+  const btnHtml = await safeEvaluate(page, () => {
+    return Array.from(document.querySelectorAll("#btnSearch")).map((el) => el.outerHTML.slice(0, 500));
+  });
+  console.log("===== [BTN outerHTML] =====");
+  if (btnHtml) console.log(JSON.stringify(btnHtml, null, 2));
+  console.log("===== [/BTN outerHTML] =====");
+
   // 사용자 확인: 목록 화면의 빨간 "등록" 버튼을 누르면 [서초로이움지젤] 제목의
   // 등록 모달(차량번호/시작일/종료일/할인/비고 + "사전차량등록" 버튼)이 뜸
   const registerClicked = await clickFirstMatch(page, [
