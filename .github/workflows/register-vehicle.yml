@@ -1,0 +1,52 @@
+name: 파킹웹 사전할인등록
+
+on:
+  workflow_dispatch:
+    inputs:
+      vehicle_number:
+        description: "차량번호 (공백 없이)"
+        required: true
+        type: string
+      start_date:
+        description: "시작일 (YYYY-MM-DD)"
+        required: true
+        type: string
+      end_date:
+        description: "종료일 (YYYY-MM-DD)"
+        required: true
+        type: string
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run vehicle registration
+        env:
+          PARKINGWEB_USERNAME: ${{ secrets.PARKINGWEB_USERNAME }}
+          PARKINGWEB_PASSWORD: ${{ secrets.PARKINGWEB_PASSWORD }}
+          VEHICLE_NUMBER: ${{ inputs.vehicle_number }}
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+        run: npm run register
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore

@@ -1,0 +1,12 @@
+{
+  "name": "parkingweb-vehicle-registration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "parkingweb.kr 사전할인등록(차량등록) 자동화 스크립트",
+  "scripts": {
+    "register": "node scripts/register-vehicle.js"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0"
+  }
+}
